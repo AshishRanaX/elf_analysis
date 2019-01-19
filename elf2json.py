@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import re
+from collections import OrderedDict
 
 def elf2json(elf_binary,output_file="output.json"):
 	#check if sys.argv[1] file exists or not, if exists, is it ELF or similar
@@ -58,5 +59,5 @@ def elf2json(elf_binary,output_file="output.json"):
 	wf.write("}}}\n")
 	wf.close()
 
-	elf_obj=json.loads(open(output_file).read())
+	elf_obj=json.loads(open(output_file).read(),object_pairs_hook=OrderedDict)
 	return elf_obj
