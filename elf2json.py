@@ -6,6 +6,10 @@ import re
 
 def elf2json(elf_binary,output_file="output.json"):
 	#check if sys.argv[1] file exists or not, if exists, is it ELF or similar
+	if not os.path.isfile(elf_binary):
+		raise FileNotFoundError('ELF binary not found')
+		return None
+
 	os.system("objdump -M intel -d "+elf_binary+" > objdump_op")
 	wf=open(output_file,"w")
 	opened_section=False  #for checking json curly brace is opened for section or not
