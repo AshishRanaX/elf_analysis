@@ -3,13 +3,14 @@ import os
 import sys
 import json
 import re
-from collections import OrderedDict
+from collections import OrderedDict  # beacuse normal dictionary looses their
 
 def elf2json(elf_binary,output_file="output.json"):
 	#check if sys.argv[1] file exists or not, if exists, is it ELF or similar
 	if not os.path.isfile(elf_binary):
 		raise FileNotFoundError('ELF binary not found')
 		return None
+
 
 	os.system("objdump -M intel -d "+elf_binary+" > objdump_op")
 	wf=open(output_file,"w")
@@ -56,8 +57,16 @@ def elf2json(elf_binary,output_file="output.json"):
 			printed_instruction=True
 		mat_obj=None
 
-	wf.write("}}}\n")
+
+	#adding starting address in json
+	wf.write("}},\n\"start_addr\":\"")
 	wf.close()
+
+	os.system("objdump -f "+elf_binary+" | grep 'start address' | cut -d ' ' -f 3 | tr -d '\n' >> "+output_file+" && echo '\"}' >> "+output_file)
+
+
+	#wf.write("")
+	
 
 	elf_obj=json.loads(open(output_file).read(),object_pairs_hook=OrderedDict)
 	return elf_obj
