@@ -56,6 +56,7 @@ def elf2json(elf_binary,output_file="output.json"):
 		mat_obj=None
 
 	wf.write("}}}\n")
+	wf.close()
 
 	elf_obj=json.loads(open(output_file).read())
 	return elf_obj
