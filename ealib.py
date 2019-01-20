@@ -15,3 +15,15 @@ def find_addr(addr,elf_obj):
 
 
 	return None
+
+def find_func(func_name,elf_obj):
+	addr_dict={'section':None,'addr':None}
+	for sections,v in elf_obj.items():
+		if isinstance(v,dict):
+			for funcs,v1 in v.items():
+				if funcs == func_name:
+					addr_dict['section']=sections
+					addr_dict['addr']=list(v1.keys())[0]
+					return addr_dict
+
+	return None
