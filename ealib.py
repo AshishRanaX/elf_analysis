@@ -27,3 +27,14 @@ def find_func(func_name,elf_obj):
 					return addr_dict
 
 	return None
+
+
+def print_asm(func_name,elf_obj):
+	addr_dict=find_func(func_name,elf_obj)
+	if addr_dict is not None:
+		for addr,inst in elf_obj[addr_dict['section']][func_name].items():
+			print(addr,":",inst)
+	else:
+		print(func_name,"not found.")
+		return None
+	return None
