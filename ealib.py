@@ -1,4 +1,6 @@
 #!/usr/bin/python3 -tt
+from PXinteract import interact
+import re
 
 def find_addr(addr,elf_obj):
 	addr=addr.lstrip("0xX") # removing 0x pattern from starting of addr, as objdump instruction starting doesnt store addr in this format
@@ -38,3 +40,25 @@ def print_asm(func_name,elf_obj):
 		print(func_name,"not found.")
 		return None
 	return None
+
+def find_mem_offset(elf_bin,elf_obj):
+	#this function is with refernce to question asked here
+	#https://stackoverflow.com/questions/54295129/elf-binary-analysis-static-vs-dynamic-how-does-assembly-code-instruction-memor
+
+	#this function will return list, 0th ele is offset, 1st ele is True | Flase, True when result is with confidence and False without confidence
+	loaded_start_addr=""
+	first_func=find_addr(elf_obj['start_addr'],elf_obj)['func']
+	op=interact("gdb -q "+elf_bin,["b "+first_func,"run","quit"])
+	for line in op:
+		try:
+			loaded_start_addr=re.search(r'Breakpoint 1, (.+?) in _start',line).groups()[0]
+		except:
+			pass
+
+	#guessing loaded_start_addr
+	if int(loaded_start_addr,16) == int(elf_obj['start_addr'],16):
+		return ["0x0",True]
+	elif int(loaded_start_addr,16) == int(elf_obj['start_addr'],16)+int("0x400000",16): #adding 0x400000 according to answer in stackoverflow
+		return ["0x400000",True]
+	else:
+		return [hex(int(loaded_start_addr,16) - int(elf_obj['start_addr'],16)),False]

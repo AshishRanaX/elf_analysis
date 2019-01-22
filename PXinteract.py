@@ -1,5 +1,10 @@
 #!/usr/bin/python3 -tt
-from subpxess import Popen,PIPE
+
+#RUN PROCESS and interact with its stdin , 
+#send stdin command in list and get output of commands in a list
+#refernce https://dzone.com/articles/interacting-with-a-long-running-child-process-in-p
+
+from subprocess import Popen,PIPE
 from time import sleep
 from threading import Thread
 from os import kill
@@ -32,10 +37,10 @@ def interact(cmd,inp_list):
         except:
             print("Not able to flush stdin")
             
-        time.sleep(0.1)
+        sleep(0.1)
         
     #output_reader(px)
-    time.sleep(1)
+    sleep(0.5)
     #print("out of loop")
     px.stdin.close()
     px.terminate()
