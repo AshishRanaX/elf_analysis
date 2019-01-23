@@ -146,3 +146,29 @@ def find_first_func(elf_bin,elf_obj,mem_offset):
 				return None
 	#return
 	return find_addr(hex(int(first_func_addr,16)-int(mem_offset,16)),elf_obj)['func']
+
+
+
+
+def count_stdin(elf_bin,max_inps=10):
+	#will return no. of stdin inpput needed by the process
+	inps=0
+	inp_li=["x"]
+	for i in range(1,max_inps+1): #taking as max stdin input
+		try:
+			#print("trying :",inp_li*i)
+			op=interact("strace "+elf_bin,inp_li*i,2)
+		except:
+			for ln in op:
+				try:
+					fd=re.search(r'\Aread\((\d+?),',ln).groups()[0]
+					
+					if int(fd) == 0:
+						inps+=1
+				except:
+					pass
+			break
+	if i == max_inps:
+		return i
+	else:
+		return inps
