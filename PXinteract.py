@@ -62,12 +62,13 @@ def interact(cmd,inp_list,stream=1): #stream parameter can be either 1(stdout) o
         try:
             px.stdin.write(inp)
         except:
-            print("Not able to write in stdin")
+            raise Exception("Not able to write in stdin")
             return None
         try:
             px.stdin.flush()
         except:
-            print("Not able to flush stdin")
+            raise Exception("Not able to flush stdin")
+            return None
             
         sleep(0.1)
         
