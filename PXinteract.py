@@ -7,23 +7,39 @@
 from subprocess import Popen,PIPE
 from time import sleep
 from threading import Thread
-from os import kill
-from signal import SIGSTOP
+from os import system
+
 
 out_list=[]
 
 def read_parallel(px):
     global out_list
     for line in iter(px.stdout.readline, b''):
-        out_list.append(line.decode('utf-8'))
+        try:
+            out_list.append(line.decode('utf-8'))
+        except:
+            pass
+        #if unicode decode error
+        #out_list.append(line.decode('ISO-8859-1'))
+
+#def kill_switch(t,px,th):
+#    sleep(t)
+#    print("here")
+#    px.stdin.close()
+#    px.terminate()
+#    system("kill -9 "+str(px.pid))
+#    th.join()
+
 
 def interact(cmd,inp_list):
     global out_list
+    out_list=[]
     px=Popen(cmd.split(" "),stdin=PIPE,stdout=PIPE,stderr=PIPE)
 
     t=Thread(target=read_parallel,args=(px,))
     t.start()
-    
+    #kt=Thread(target=kill_switch,args=(kill_time,px,t,))
+    #kt.start()
     for ix in inp_list:
         inp=ix+"\n"
         inp=inp.encode('utf-8')
@@ -41,10 +57,10 @@ def interact(cmd,inp_list):
         
     #output_reader(px)
     sleep(0.5)
-    #print("out of loop")
+    
     px.stdin.close()
     px.terminate()
-    kill(px.pid,SIGSTOP)
-    px.wait(timeout=0.2)
+    system("kill -9 "+str(px.pid))
     t.join()
+  
     return out_list

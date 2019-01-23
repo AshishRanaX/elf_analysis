@@ -47,18 +47,32 @@ def find_mem_offset(elf_bin,elf_obj):
 
 	#this function will return list, 0th ele is offset, 1st ele is True | Flase, True when result is with confidence and False without confidence
 	loaded_start_addr=""
+	start_addr=""
 	first_func=find_addr(elf_obj['start_addr'],elf_obj)['func']
-	op=interact("gdb -q "+elf_bin,["b "+first_func,"run","quit"])
+	#suppose first_func is main@@Base but while loading this in gdb, there is no such thing to get a breakpoint,
+	#there is main @@Base is trimmed
+	#experimental change
+	first_func_n=first_func.split("@")[0]
+
+	op=interact("gdb -q "+elf_bin,["b "+first_func_n,"run","quit"])
 	for line in op:
 		try:
-			loaded_start_addr=re.search(r'Breakpoint 1, (.+?) in _start',line).groups()[0]
+			start_addr=re.search(r'Breakpoint 1 at (.+?)\n',line).groups()[0]
 		except:
 			pass
-
+		try:
+			loaded_start_addr=re.search(r'Breakpoint 1, (.+?) in '+first_func_n,line).groups()[0]
+		except:
+			pass
+	if loaded_start_addr != "" and start_addr !="":
 	#guessing loaded_start_addr
-	if int(loaded_start_addr,16) == int(elf_obj['start_addr'],16):
-		return ["0x0",True]
-	elif int(loaded_start_addr,16) == int(elf_obj['start_addr'],16)+int("0x400000",16): #adding 0x400000 according to answer in stackoverflow
-		return ["0x400000",True]
+		
+		if int(loaded_start_addr,16) == int(start_addr,16):
+			return ["0x0",True]
+		elif int(loaded_start_addr,16) == int(start_addr,16)+int("0x400000",16): #adding 0x400000 according to answer in stackoverflow
+			return ["0x400000",True]
+		else:
+			return [hex(int(loaded_start_addr,16) - int(start_addr,16)),False]
 	else:
-		return [hex(int(loaded_start_addr,16) - int(elf_obj['start_addr'],16)),False]
+		
+		raise Exception("ealib find_mem_offset failed to find offset")
