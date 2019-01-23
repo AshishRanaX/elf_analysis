@@ -1,6 +1,7 @@
 #!/usr/bin/python3 -tt
 from PXinteract import interact
 import re
+from os import system
 
 def find_addr(addr,elf_obj):
 	addr=addr.lstrip("0xX") # removing 0x pattern from starting of addr, as objdump instruction starting doesnt store addr in this format
@@ -74,5 +75,74 @@ def find_mem_offset(elf_bin,elf_obj):
 		else:
 			return [hex(int(loaded_start_addr,16) - int(start_addr,16)),False]
 	else:
-		
 		raise Exception("ealib find_mem_offset failed to find offset")
+
+def guess_mem_offset(elf_bin,elf_obj):
+	#based on find_mem_offset function
+	result=[]
+	for i in range(3):
+		mem=None
+		for j in range(2):
+			try:
+				mem=find_mem_offset(elf_bin,elf_obj)[0]
+				break
+			except:
+				pass
+		if mem:
+			result.append(mem)
+
+	if len(set(result)) == 1:
+		return result[0]
+	elif len(set(result)) == 0:
+		return None
+	else:
+		raise Exception("Memory is randomized")
+
+
+def find_first_func(elf_bin,elf_obj,mem_offset):
+	text_addrs=[]
+	for func in elf_obj['.text']:
+		if (func[0] != "_") and (func != "register_tm_clones") and(func != "frame_dummy"):
+			addr="0x"+list(elf_obj['.text'][func].keys())[0]
+			text_addrs.append(hex(int(addr,16)+int(mem_offset,16)))
+
+
+	first_func=find_addr(elf_obj['start_addr'],elf_obj)['func'] #first_func accordint to enry point
+	first_func=first_func.split("@")[0]
+
+	if first_func == "main":
+		first_func_addr=hex(int(elf_obj['start_addr'],16)+int(mem_offset,16))
+						#if first function in objdump is main or main@@Base
+
+	else:
+		system("echo -n '' > gdb.txt")
+		if len(text_addrs)==1:
+			first_func_addr=text_addrs[0]
+		else:
+			gdb_cmds=["b "+first_func,
+					"run",
+					"set logging on",
+					"set logging redirect on",
+					"while $eip"]
+			for addr in text_addrs:
+				gdb_cmds.append("if $eip == "+addr)
+				gdb_cmds.append("set logging off")
+				gdb_cmds.append("p \"found\"")
+				gdb_cmds.append("x/x $eip")
+				gdb_cmds.append("c")
+				gdb_cmds.append("end")
+
+			gdb_cmds.append("stepi")
+			gdb_cmds.append("end")
+			gdb_cmds.append("quit")
+			
+			op=interact("gdb -q "+elf_bin,gdb_cmds)
+			system("echo -n '' > gdb.txt")
+			try:
+				first_func_addr=re.search(r'\$1 = \"found\"\n (.+?) ',' '.join(op)).groups()[0]
+			except:
+				#print("FFA : "+first_func_addr)
+				#print(op)
+				return None
+	#return
+	return find_addr(hex(int(first_func_addr,16)-int(mem_offset,16)),elf_obj)['func']
