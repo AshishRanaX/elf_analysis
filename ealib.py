@@ -3,6 +3,8 @@ from PXinteract import interact
 import re
 from os import system
 
+non_userdefined_funcs=["deregister_tm_clones","register_tm_clones","frame_dummy"]
+
 def find_addr(addr,elf_obj):
 	addr=addr.lstrip("0xX") # removing 0x pattern from starting of addr, as objdump instruction starting doesnt store addr in this format
 	addr_dict={'section':None,'func':None,'asm':None}
@@ -99,14 +101,23 @@ def guess_mem_offset(elf_bin,elf_obj):
 		raise Exception("Memory is randomized")
 
 
-def find_first_func(elf_bin,elf_obj,mem_offset):
-	text_addrs=[]
+
+def find_all_func(elf_obj):
+	#will return all user defined function and their address
+	func_names=[]
+	global non_userdefined_funcs
 	for func in elf_obj['.text']:
-		if (func[0] != "_") and (func != "register_tm_clones") and(func != "frame_dummy"):
+		if (func[0] != "_") and (func not in non_userdefined_funcs):
 			addr="0x"+list(elf_obj['.text'][func].keys())[0]
-			text_addrs.append(hex(int(addr,16)+int(mem_offset,16)))
+			func_names.append((addr,func))
+	return func_names
 
-
+def find_first_func(elf_bin,elf_obj,mem_offset):
+	#will return tuple with addr,funcname :: addr will be without offset
+	
+	
+	funcs_list=find_all_func(elf_obj)
+	
 	first_func=find_addr(elf_obj['start_addr'],elf_obj)['func'] #first_func accordint to enry point
 	first_func=first_func.split("@")[0]
 
@@ -116,16 +127,16 @@ def find_first_func(elf_bin,elf_obj,mem_offset):
 
 	else:
 		system("echo -n '' > gdb.txt")
-		if len(text_addrs)==1:
-			first_func_addr=text_addrs[0]
+		if len(funcs_list)==1:
+			first_func_addr=funcs_list[0][0]
 		else:
 			gdb_cmds=["b "+first_func,
 					"run",
 					"set logging on",
 					"set logging redirect on",
 					"while $eip"]
-			for addr in text_addrs:
-				gdb_cmds.append("if $eip == "+addr)
+			for func_tup in funcs_list:
+				gdb_cmds.append("if $eip == "+func_tup[0])
 				gdb_cmds.append("set logging off")
 				gdb_cmds.append("p \"found\"")
 				gdb_cmds.append("x/x $eip")
@@ -145,7 +156,9 @@ def find_first_func(elf_bin,elf_obj,mem_offset):
 				#print(op)
 				return None
 	#return
-	return find_addr(hex(int(first_func_addr,16)-int(mem_offset,16)),elf_obj)['func']
+	first_func_addr=hex(int(first_func_addr,16)-int(mem_offset,16))
+	return (first_func_addr,find_addr(first_func_addr,elf_obj)['func'])
+
 
 
 
