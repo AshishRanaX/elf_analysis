@@ -185,3 +185,72 @@ def count_stdin(elf_bin,max_inps=10):
 		return i
 	else:
 		return inps
+
+def func_call_flow(elf_bin,elf_obj):
+	#will return list of
+		#mem_offset
+		#function name in order of call tuple(addr,func_name)
+
+	funcs_list=find_all_func(elf_obj)
+	n_stdin=count_stdin(elf_bin)
+	inps_file=open("inps","w")
+
+	for i in range(n_stdin): #creating input file accorindg to number of stdin
+		inps_file.write("A\n")
+
+	gdb_cmds=[]
+	for func in funcs_list:
+		fname=func[1].split("@")[0]
+		gdb_cmds.append("break "+fname)
+	gdb_cmds.append("run < inps")		#so that stdin wont interrupt gdb commands
+	for i in range(len(funcs_list)*len(funcs_list)): #adding continue n*n times, bcs there can be some recursive loop so giving max tries as n*n
+		gdb_cmds.append("continue")
+	#print(gdb_cmds)	
+	op=interact("gdb -q "+elf_bin,gdb_cmds)
+	break_points=[]
+	break_point_hits=[]
+	
+	for l in op:
+		if l.find("Breakpoint") != -1:
+			mat=None
+			try:
+				mat=re.search(r'Breakpoint (\d+?) at (\w+?)\n',l).groups()
+			except:
+				pass
+			else:
+				break_points.append(mat)
+
+			mat=None
+			try:
+				mat=re.search(r'Breakpoint (\d+?), (\w+?) in (.+?) \(\)\n',l).groups()
+			except:
+				pass
+			else:
+				break_point_hits.append(mat)
+				
+	#break_point list, adding func name for addrs
+	for i in range(len(break_points)):
+		bp=break_points[i]
+		func=find_addr(bp[1],elf_obj)['func']
+		break_points[i]=bp+(func,)
+
+	#calculating offset
+	offset=[]
+	for bph in list(set(break_point_hits)):
+		for bp in break_points:
+			if bp[0] == bph[0]:
+				offset.append(hex(int(bph[1],16)-int(bp[1],16)))
+	
+	offset=list(set(offset))
+	if len(offset) == 1:
+		mem_offset=offset[0]
+	else:
+		mem_offset=None
+
+	func_flow=[]
+	for bph in break_point_hits:
+		for bp in break_points:
+			if bp[0] == bph[0]:
+				func_flow.append((bp[1],bp[2]))
+
+	return [mem_offset,func_flow]
