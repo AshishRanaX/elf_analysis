@@ -41,7 +41,7 @@ def readerr_parallel(px):
 #    th.join()
 
 
-def interact(cmd,inp_list,stream=1): #stream parameter can be either 1(stdout) or 2(stderr) or 3(both) in 3 op will be [[stdout op],[stderr op]]
+def interact(cmd,inp_list=[],stream=1): #stream parameter can be either 1(stdout) or 2(stderr) or 3(both) in 3 op will be [[stdout op],[stderr op]]
     global out_list
     global err_list
     out_list=[]

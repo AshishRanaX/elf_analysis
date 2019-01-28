@@ -1,7 +1,9 @@
 #!/usr/bin/python3 -tt
 from PXinteract import interact
 import re
-from os import system
+from os import system,path
+from collections import OrderedDict
+from random import choice as rand
 
 non_userdefined_funcs=["deregister_tm_clones","register_tm_clones","frame_dummy"]
 
@@ -165,6 +167,7 @@ def find_first_func(elf_bin,elf_obj,mem_offset):
 
 def count_stdin(elf_bin,max_inps=10):
 	#will return no. of stdin inpput needed by the process
+	op=[]
 	inps=0
 	inp_li=["x"]
 	for i in range(1,max_inps+1): #taking as max stdin input
@@ -193,10 +196,11 @@ def func_call_flow(elf_bin,elf_obj):
 
 	funcs_list=find_all_func(elf_obj)
 	n_stdin=count_stdin(elf_bin)
-	inps_file=open("inps","w")
+	inps_file=open("inps/std_inps","w")
 
 	for i in range(n_stdin): #creating input file accorindg to number of stdin
 		inps_file.write("A\n")
+	inps_file.close()
 
 	gdb_cmds=[]
 	for func in funcs_list:
@@ -254,3 +258,181 @@ def func_call_flow(elf_bin,elf_obj):
 				func_flow.append((bp[1],bp[2]))
 
 	return [mem_offset,func_flow]
+
+
+def dump_memory(func_name,end_addr,elf_bin):
+	#will return stack memory dump from func start to end in a list of integer values
+	gdb_cmds=[]
+	gdb_cmds.append("break "+func_name)
+	gdb_cmds.append("run < inps/std_inps")
+	gdb_cmds.append("break *"+end_addr)
+	gdb_cmds.append("continue")
+	#dumping memory , will dump +0x8 bytes, to get return addr in dumped memory
+	gdb_cmds.append("dump memory "+"mem_dumps/"+func_name+" $esp $ebp+0x8")
+
+	op=interact("gdb -q "+elf_bin,gdb_cmds)
+	#print(op)
+
+	if path.isfile("mem_dumps/"+func_name):
+		mem_dump=open("mem_dumps/"+func_name, "rb").read()
+		mem_dump_int=[]
+		for i in mem_dump:
+			if not isinstance(i,int):
+				i=ord(i)
+			mem_dump_int.append(i)
+		return mem_dump_int
+	else:
+		return None
+
+
+def bof_analysis(elf_bin,elf_obj,mem_offset):
+	func_flow=func_call_flow(elf_bin,elf_obj)
+	#mem_offset=func_flow[0] #find mem_offset with guess mem_offset (if mem is randomize discontinue analysis)
+	func_flow=func_flow[1]
+
+	break_points=[]
+	for fun_tup in func_flow:
+		func=fun_tup[1]
+		func_n=func.split("@")[0]
+		func_dict=find_func(func,elf_obj)
+		
+		if func_dict:
+			for a,i in OrderedDict(reversed(list(elf_obj[func_dict['section']][func].items()))).items():
+				if i.find("xchg") != -1 or i.find("ret") != -1 or i.find("hlt") != -1 or i.find("repz") != -1 or i.find("leave") != -1 or i.find("lea") != -1 or i.find("pop") != -1 or i.find("nop") != -1:
+					pass
+				else:
+					break_points.append((func_n,hex(int("0x"+a,16)+int(mem_offset,16))))
+					break
+		else:
+			raise Exception("Func Flow's Function not found in elf_obj")
+
+	print(break_points)
+	#exit()
+	#creating input files
+	n_stdin=count_stdin(elf_bin)
+	inps_file=open("inps/std_inps","wb")
+
+
+
+	for i in range(n_stdin): #creating input file accorindg to number of stdin
+		chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		rand_chars=rand(chars)+rand(chars)+rand(chars)+rand(chars)
+		inps_file.write(rand_chars.encode('utf-8')+b"\n")
+	inps_file.close()
+
+	vuln_list=[]
+	for brk_tup in break_points:
+		
+		end_breakpoint=brk_tup[1]
+		for i in range(4):
+			print("Dumping for "+brk_tup[0]+"-> "+end_breakpoint)
+			mem_dump_int=dump_memory(brk_tup[0],end_breakpoint,elf_bin)
+
+			if not mem_dump_int:
+				#not able to dump memory, hence trying to break program with one instruction above [brk_tup[0]]
+				static_addr=hex(int(brk_tup[1],16)-int(mem_offset,16))
+				addr_dict=find_addr(static_addr,elf_obj)
+				prev_addr=None
+				for i in elf_obj[addr_dict['section']][addr_dict['func']]:
+					#print(i,static_addr)
+					if "0x"+i == static_addr:
+						break
+					prev_addr=i
+					
+				
+				end_breakpoint=hex(int("0x"+str(prev_addr),16)+int(mem_offset,16))
+
+			else:
+				break
+
+			continue
+
+		inps=open("inps/std_inps").readlines()
+		vuln_details={'ret_addr':None,'shell_len':None,'func':None,'egg':False,'nth_input':None}
+		vuln_details["func"]=brk_tup[0]
+		nth_input=0
+		for inp in inps:
+			nth_input+=1
+			inpl=[]
+			for i in range(4):
+				inpl.append(ord(inp[i]))
+			#need to check if inpl is present in mem_dump in same order or not
+			#print(inpl)
+			offset=None
+			for i in range(len(mem_dump_int)):
+
+				if inpl[0]==int(mem_dump_int[i]):
+			
+					if inpl[1] ==mem_dump_int[i+1] and inpl[2] ==mem_dump_int[i+2] and inpl[3] ==mem_dump_int[i+3]:
+			
+						offset=i
+						break
+			if offset:
+				vuln_to_bof=False
+				vuln_details['egg']=True
+				print("found EGG in "+brk_tup[0])
+				
+				#checking if we can overwrite EIP
+
+				#creating input file
+				inps_file=open("inps/std_inps1","wb")
+
+				shell_len=len(mem_dump_int)-offset
+				for i in inps:
+					if i.find(inp) != -1:
+						inps_file.write(b"YEGG"+b"A"*(shell_len-4)+b"\n")
+					else:
+						inps_file.write("X"+"\n")
+				inps_file.close()
+
+				gdb_cmds=[]
+				gdb_cmds.append("break "+brk_tup[0])
+				gdb_cmds.append("run < inps/std_inps1")
+				gdb_cmds.append("break *"+brk_tup[1])
+				gdb_cmds.append("continue")
+				#dumping memory , will dump +0x8 bytes, to get return addr in dumped memory
+				gdb_cmds.append("dump memory "+"mem_dumps/"+brk_tup[0]+" $esp $ebp+0x8")
+				gdb_cmds.append("find $esp, $ebp+0x8, 0x47474559") #hex for string YEGG
+
+				op=interact("gdb -q "+elf_bin,gdb_cmds)
+				print(op)
+				mem_dump=open("mem_dumps/"+brk_tup[0], "rb").read()
+				mem_dump_int=[]
+				for i in mem_dump[-4:]:
+					if not isinstance(i,int):
+						i=ord(i)
+					mem_dump_int.append(i)
+				if mem_dump_int[0]==65 and mem_dump_int[1]==65 and mem_dump_int[2]==65 and mem_dump_int[3]==65:
+					#print("EIP can be ovewritten")
+					
+					vuln_details["shell_len"]=shell_len
+					vuln_details["nth_input"]=nth_input
+					#vuln_details={"func":brk_tup[0],"shell_len":shell_len}
+					vuln_to_bof=True
+
+				if vuln_to_bof:
+					print(op)
+					#finding stack address to overwrite in EIP
+					try:
+						ind=op.index("1 pattern found.\n")
+						ret_addr=re.search(r'0x.+',op[ind-1]).group()
+						vuln_details['ret_addr']=ret_addr
+
+					except:
+						raise Exception("Error in finding stack return address")
+
+		if vuln_details:
+			vuln_list.append(vuln_details)
+
+	return vuln_list
+
+
+def clean_temp():
+	if not path.isdir("mem_dumps"):
+		system("mkdir mem_dumps")
+	else:
+		system("rm -rf mem_dumps/*")
+	if not path.isdir("inps"):
+		system("mkdir inps")
+	else:
+		system("rm -rf inps/*")
