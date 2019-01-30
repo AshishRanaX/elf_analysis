@@ -189,14 +189,15 @@ def count_stdin(elf_bin,max_inps=10):
 	else:
 		return inps
 
-def func_call_flow(elf_bin,elf_obj):
+def func_call_flow(elf_bin,elf_obj,funcs_list=None,n_stdin=None):
 	#will return list of
 		#mem_offset
 		#function name in order of call tuple(addr,func_name)
-
-	funcs_list=find_all_func(elf_obj)
-	n_stdin=count_stdin(elf_bin)
-	inps_file=open("inps/std_inps","w")
+	if not funcs_list:
+		funcs_list=find_all_func(elf_obj)
+	if not n_stdin:
+		n_stdin=count_stdin(elf_bin)
+	inps_file=open("temp/inps/std_inps","w")
 
 	for i in range(n_stdin): #creating input file accorindg to number of stdin
 		inps_file.write("A\n")
@@ -206,7 +207,7 @@ def func_call_flow(elf_bin,elf_obj):
 	for func in funcs_list:
 		fname=func[1].split("@")[0]
 		gdb_cmds.append("break "+fname)
-	gdb_cmds.append("run < inps")		#so that stdin wont interrupt gdb commands
+	gdb_cmds.append("run < temp/inps/std_inps")		#so that stdin wont interrupt gdb commands
 	for i in range(len(funcs_list)*len(funcs_list)): #adding continue n*n times, bcs there can be some recursive loop so giving max tries as n*n
 		gdb_cmds.append("continue")
 	#print(gdb_cmds)	
@@ -264,17 +265,17 @@ def dump_memory(func_name,end_addr,elf_bin):
 	#will return stack memory dump from func start to end in a list of integer values
 	gdb_cmds=[]
 	gdb_cmds.append("break "+func_name)
-	gdb_cmds.append("run < inps/std_inps")
+	gdb_cmds.append("run < temp/inps/std_inps")
 	gdb_cmds.append("break *"+end_addr)
 	gdb_cmds.append("continue")
 	#dumping memory , will dump +0x8 bytes, to get return addr in dumped memory
-	gdb_cmds.append("dump memory "+"mem_dumps/"+func_name+" $esp $ebp+0x8")
+	gdb_cmds.append("dump memory "+"temp/mem_dumps/"+func_name+" $esp $ebp+0x8")
 
 	op=interact("gdb -q "+elf_bin,gdb_cmds)
 	#print(op)
 
-	if path.isfile("mem_dumps/"+func_name):
-		mem_dump=open("mem_dumps/"+func_name, "rb").read()
+	if path.isfile("temp/mem_dumps/"+func_name):
+		mem_dump=open("temp/mem_dumps/"+func_name, "rb").read()
 		mem_dump_int=[]
 		for i in mem_dump:
 			if not isinstance(i,int):
@@ -285,10 +286,12 @@ def dump_memory(func_name,end_addr,elf_bin):
 		return None
 
 
-def bof_analysis(elf_bin,elf_obj,mem_offset):
-	func_flow=func_call_flow(elf_bin,elf_obj)
+def bof_analysis(elf_bin,elf_obj,mem_offset,func_flow=None,n_stdin=None):
+	if not func_flow:
+		func_flow=func_call_flow(elf_bin,elf_obj)
+		func_flow=func_flow[1]
 	#mem_offset=func_flow[0] #find mem_offset with guess mem_offset (if mem is randomize discontinue analysis)
-	func_flow=func_flow[1]
+	
 
 	break_points=[]
 	for fun_tup in func_flow:
@@ -305,12 +308,14 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 					break
 		else:
 			raise Exception("Func Flow's Function not found in elf_obj")
-
+	print()
+	print("\tSetting break points at following names and addresses\n\t",end='')
 	print(break_points)
 	#exit()
 	#creating input files
-	n_stdin=count_stdin(elf_bin)
-	inps_file=open("inps/std_inps","wb")
+	if not n_stdin:
+		n_stdin=count_stdin(elf_bin)
+	inps_file=open("temp/inps/std_inps","wb")
 
 
 
@@ -325,7 +330,7 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 		
 		end_breakpoint=brk_tup[1]
 		for i in range(4):
-			print("Dumping for "+brk_tup[0]+"-> "+end_breakpoint)
+			print("\tDumping for "+brk_tup[0]+"-> "+end_breakpoint)
 			mem_dump_int=dump_memory(brk_tup[0],end_breakpoint,elf_bin)
 
 			if not mem_dump_int:
@@ -347,7 +352,7 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 
 			continue
 
-		inps=open("inps/std_inps").readlines()
+		inps=open("temp/inps/std_inps").readlines()
 		vuln_details={'ret_addr':None,'shell_len':None,'func':None,'egg':False,'nth_input':None}
 		vuln_details["func"]=brk_tup[0]
 		nth_input=0
@@ -367,15 +372,16 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 			
 						offset=i
 						break
+
 			if offset:
 				vuln_to_bof=False
 				vuln_details['egg']=True
-				print("found EGG in "+brk_tup[0])
+				print("\tFound EGG in "+brk_tup[0])
 				
 				#checking if we can overwrite EIP
 
 				#creating input file
-				inps_file=open("inps/std_inps1","wb")
+				inps_file=open("temp/inps/std_inps1","wb")
 
 				shell_len=len(mem_dump_int)-offset
 				for i in inps:
@@ -387,16 +393,16 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 
 				gdb_cmds=[]
 				gdb_cmds.append("break "+brk_tup[0])
-				gdb_cmds.append("run < inps/std_inps1")
+				gdb_cmds.append("run < temp/inps/std_inps1")
 				gdb_cmds.append("break *"+brk_tup[1])
 				gdb_cmds.append("continue")
 				#dumping memory , will dump +0x8 bytes, to get return addr in dumped memory
-				gdb_cmds.append("dump memory "+"mem_dumps/"+brk_tup[0]+" $esp $ebp+0x8")
+				gdb_cmds.append("dump memory "+"temp/mem_dumps/"+brk_tup[0]+" $esp $ebp+0x8")
 				gdb_cmds.append("find $esp, $ebp+0x8, 0x47474559") #hex for string YEGG
 
 				op=interact("gdb -q "+elf_bin,gdb_cmds)
-				print(op)
-				mem_dump=open("mem_dumps/"+brk_tup[0], "rb").read()
+				#print(op)
+				mem_dump=open("temp/mem_dumps/"+brk_tup[0], "rb").read()
 				mem_dump_int=[]
 				for i in mem_dump[-4:]:
 					if not isinstance(i,int):
@@ -411,7 +417,7 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 					vuln_to_bof=True
 
 				if vuln_to_bof:
-					print(op)
+					#print(op)
 					#finding stack address to overwrite in EIP
 					try:
 						ind=op.index("1 pattern found.\n")
@@ -428,11 +434,52 @@ def bof_analysis(elf_bin,elf_obj,mem_offset):
 
 
 def clean_temp():
-	if not path.isdir("mem_dumps"):
-		system("mkdir mem_dumps")
+	if not path.isdir("temp/mem_dumps"):
+		system("mkdir -p temp/mem_dumps")
 	else:
-		system("rm -rf mem_dumps/*")
-	if not path.isdir("inps"):
-		system("mkdir inps")
+		system("rm -rf temp/mem_dumps/*")
+
+	if not path.isdir("temp/inps"):
+		system("mkdir -p temp/inps")
 	else:
-		system("rm -rf inps/*")
+		system("rm -rf temp/inps/*")
+
+def print_banner():
+	banner=r"""                                                                                  
+,------.,--.   ,------.                            ,--.               ,--.        
+|  .---'|  |   |  .---'     ,--,--.,--,--,  ,--,--.|  |,--. ,--.,---. `--' ,---.  
+|  `--, |  |   |  `--,     ' ,-.  ||      \' ,-.  ||  | \  '  /(  .-' ,--.(  .-'  
+|  `---.|  '--.|  |`       \ '-'  ||  ||  |\ '-'  ||  |  \   ' .-'  `)|  |.-'  `) 
+`------'`-----'`--'         `--`--'`--''--' `--`--'`--'.-'  /  `----' `--'`----'  
+                                                       `---'                   v 1.0  
+                                                       							"""
+	print(banner)
+
+
+def pout(type,msg): #print out
+	#type can be info=0, success=1,failure=2
+	prefix=None
+	if type == 0:
+		prefix="[*]"
+	elif type == 1:
+		prefix="[+]"
+	elif type == 2:
+		prefix="[!]"
+	else:
+		prefix="[.]"
+
+	print(prefix+" "+msg)
+
+
+def find_gdb_mem_diff():
+	if not path.isfile("stack_address.c"):
+		return None
+
+	system("gcc -o temp/stack_address stack_address.c")
+	if not path.isfile("temp/stack_address"):
+		return None
+
+	nongdb_addr=interact("temp/stack_address")[0].split(":")[1]
+	gdb_addr_str=interact("gdb -q temp/stack_address",["run","quit"])[2]
+	gdb_addr=re.search(r'AdDr:([x0-9a-fA-F]{4,10})',gdb_addr_str).groups()[0]
+	return int(nongdb_addr,16) - int(gdb_addr,16)

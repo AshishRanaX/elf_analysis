@@ -5,20 +5,20 @@ import json
 import re
 from collections import OrderedDict  # beacuse normal dictionary looses their
 
-def elf2json(elf_binary,output_file="output.json"):
+def elf2json(elf_binary,output_file="temp/output.json"):
 	#check if sys.argv[1] file exists or not, if exists, is it ELF or similar
 	if not os.path.isfile(elf_binary):
 		raise FileNotFoundError('ELF binary not found')
 		return None
 
 
-	os.system("objdump -M intel -d "+elf_binary+" > objdump_op")
+	os.system("objdump -M intel -d "+elf_binary+" > temp/objdump_op")
 	wf=open(output_file,"w")
 	opened_section=False  #for checking json curly brace is opened for section or not
 	opended_func=False
 	opened_instruction=False
 	printed_instruction=False 	#varialbe will tell last iteration of loop wf.writeed instruction or not #for deciding to put comma at end or not
-	fl=open("objdump_op","rU")
+	fl=open("temp/objdump_op","rU")
 	wf.write("{\n")
 	for line in fl:
 
