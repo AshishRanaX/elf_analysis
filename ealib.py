@@ -329,13 +329,13 @@ def bof_analysis(elf_bin,elf_obj,mem_offset,func_flow=None,n_stdin=None):
 	for brk_tup in break_points:
 		
 		end_breakpoint=brk_tup[1]
-		for i in range(4):
+		for i in range(6): #max try if for mem dump in case of 0 byte result
 			print("\tDumping for "+brk_tup[0]+"-> "+end_breakpoint)
 			mem_dump_int=dump_memory(brk_tup[0],end_breakpoint,elf_bin)
 
 			if not mem_dump_int:
 				#not able to dump memory, hence trying to break program with one instruction above [brk_tup[0]]
-				static_addr=hex(int(brk_tup[1],16)-int(mem_offset,16))
+				static_addr=hex(int(end_breakpoint,16)-int(mem_offset,16))
 				addr_dict=find_addr(static_addr,elf_obj)
 				prev_addr=None
 				for i in elf_obj[addr_dict['section']][addr_dict['func']]:
@@ -344,13 +344,20 @@ def bof_analysis(elf_bin,elf_obj,mem_offset,func_flow=None,n_stdin=None):
 						break
 					prev_addr=i
 					
-				
-				end_breakpoint=hex(int("0x"+str(prev_addr),16)+int(mem_offset,16))
+				if not prev_addr:
+					break
+				else:
+					end_breakpoint=hex(int("0x"+str(prev_addr),16)+int(mem_offset,16))
 
 			else:
 				break
 
+		if not mem_dump_int:
+			vuln_details={'ret_addr':None,'shell_len':None,'func':brk_tup[0],'egg':False,'nth_input':None}
+			vuln_list.append(vuln_details)
 			continue
+		#	continue
+
 
 		inps=open("temp/inps/std_inps").readlines()
 		vuln_details={'ret_addr':None,'shell_len':None,'func':None,'egg':False,'nth_input':None}
@@ -443,6 +450,7 @@ def clean_temp():
 		system("mkdir -p temp/inps")
 	else:
 		system("rm -rf temp/inps/*")
+	
 
 def print_banner():
 	banner=r"""                                                                                  
