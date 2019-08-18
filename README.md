@@ -15,7 +15,7 @@ Perform Static and dynamic analysis on 32 bit ELF binary, and automate the proce
 
 	USAGE example,
 
-	from PXinteract import intearct
+	from PXinteract import interact
 	op=interact(cmd,inp_list=[],stream=1)
 
 ### final.py
