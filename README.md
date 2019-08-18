@@ -19,7 +19,7 @@ Perform Static and dynamic analysis on 32 bit ELF binary, and automate the proce
 	op=interact(cmd,inp_list=[],stream=1)
 
 ### final.py
-	Do complete analysis for buffer overflow vulnerabilyt and genearte exploit
+	Do complete analysis for buffer overflow vulnerability and genearte exploit
 
 	USAGE example,
 
